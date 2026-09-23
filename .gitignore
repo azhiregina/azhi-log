@@ -1,5 +1,7 @@
 .nojekyll
+.env
 write_entry.log
+cron.log
 live.html
 *.pyc
 __pycache__/
