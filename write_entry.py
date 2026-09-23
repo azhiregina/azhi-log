@@ -167,6 +167,18 @@ def main():
     recent = "\n\n".join(f"【{e['date']}】《{e['title']}》\n{e['body'][:200]}"
                          for e in entries[:7]) or "（还没有写过）"
 
+    # ---- 同步远端 ----
+    # 本机也可能往仓库推东西。不先同步，等会儿 push 就会被拒，
+    # 而失败只会写进日志 —— 网站从此不再更新，且没人知道。
+    rc_st, st = git("status", "--porcelain")
+    if st.strip():
+        git("add", "-A")
+        git("commit", "-m", "自动提交：上次未推完的改动")
+    rc, out = git("pull", "--rebase", "origin", "main")
+    if rc != 0:
+        log(f"⚠️ 同步远端失败，本次跳过以免产生冲突：{out.strip()[-200:]}")
+        return 1
+
     env = load_env()
     log("调用模型写作中…")
     raw = call_api(env, recent)
@@ -202,7 +214,12 @@ def main():
     git("commit", "-m", f"日志 {d.isoformat()}：{title}")
     rc, out = git("push", "origin", "main")
     if rc != 0:
-        log(f"⚠️ 推送失败：{out.strip()[-300:]}")
+        # 远端可能刚好又动了 —— rebase 后重试一次
+        log("推送被拒，rebase 后重试…")
+        git("pull", "--rebase", "origin", "main")
+        rc, out = git("push", "origin", "main")
+    if rc != 0:
+        log(f"⚠️ 推送失败（文章已存在本地，下次会自动重推）：{out.strip()[-300:]}")
         return 1
 
     _, local = git("log", "--oneline", "-1")
