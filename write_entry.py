@@ -19,6 +19,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ENTRIES = os.path.join(HERE, "entries.json")
 LOG = os.path.join(HERE, "write_entry.log")
 START = date(2026, 2, 17)
+WRITE_FROM_HOUR = 7  # 温哥华时间 07:00 之后才写（此后每个整点都会补，直到写成）
 
 try:
     from zoneinfo import ZoneInfo
@@ -141,16 +142,25 @@ def main():
     test_only = "--test" in args
     force = "--force" in args
 
-    d = today()
+    now = datetime.now(VAN)
+    d = now.date()
     entries = json.load(open(ENTRIES, encoding="utf-8"))
     have = [e for e in entries if e.get("date") == d.isoformat()]
 
     if check_only:
-        log(f"检查：温哥华 {d} -> {'已写' if have else '还没写'}；共 {len(entries)} 篇")
+        log(f"检查：温哥华 {now.strftime('%Y-%m-%d %H:%M')} -> {'已写' if have else '还没写'}；共 {len(entries)} 篇")
         return 0
 
+    # 时间窗：温哥华 07:00 之后才动手。
+    # cron 每小时跑一次，第一次过 7 点就写 —— 不依赖 cron 的 CRON_TZ，
+    # 而且服务器万一在 7 点那会儿不在线，后面每个整点都会自动补上。
+    if not force and not test_only and now.hour < WRITE_FROM_HOUR:
+        return 0  # 静默
+
     if have and not force and not test_only:
-        log(f"温哥华 {d} 今天已经写过了（《{have[0]['title']}》），跳过。共 {len(entries)} 篇")
+        # 每天只在 7 点那一班留一行"一切正常"，其它整点保持安静
+        if now.hour == WRITE_FROM_HOUR:
+            log(f"温哥华 {d} 今天已经写过了（《{have[0]['title']}》），跳过。共 {len(entries)} 篇")
         return 0
 
     entries.sort(key=lambda x: x["date"], reverse=True)
