@@ -1,0 +1,5 @@
+.nojekyll
+write_entry.log
+live.html
+*.pyc
+__pycache__/
